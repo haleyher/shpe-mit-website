@@ -32,9 +32,8 @@ export const pointsConfig = {
     "https://script.google.com/macros/s/AKfycbwFWbsdFoWs_9iQ5IK8I14hKOViqXED8QNzuO4J4iN8HTHCEIp0xUebhQMFdpk5CB0/exec",
   // Slack app Client ID (public — safe to keep here). Used to start the login.
   slackClientId: import.meta.env.VITE_SLACK_CLIENT_ID || "2566533801857.11466251218710",
-  // Where Slack sends members back after login. Leave blank to use the site's own
-  // address automatically; set it only if you need to force a specific URL. This
-  // MUST match the Redirect URL registered in the Slack app AND the SITE_URL
-  // Script Property in the backend.
-  siteUrl: import.meta.env.VITE_SITE_URL || "",
+  // Where Slack sends members back after login. This MUST match, character-for-
+  // character, BOTH the Redirect URL registered in the Slack app AND the SITE_URL
+  // Script Property in the backend. Keep it clean: https, no trailing dot.
+  siteUrl: import.meta.env.VITE_SITE_URL || "https://shpe.mit.edu/",
 };

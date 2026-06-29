@@ -23,10 +23,11 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-// Where Slack sends the member back to. Defaults to this site's own address
-// (origin + base path). Must match the Slack app's Redirect URL exactly.
+// Where Slack sends the member back to. Uses the configured siteUrl so it's a
+// fixed, clean value (NOT derived from the asset base path). Must match the
+// Slack app's Redirect URL exactly.
 function redirectUri(): string {
-  return pointsConfig.siteUrl || window.location.origin + import.meta.env.BASE_URL;
+  return pointsConfig.siteUrl || window.location.origin + "/";
 }
 
 // Step 1 — send the member straight to Slack to sign in.
