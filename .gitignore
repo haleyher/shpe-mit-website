@@ -1,0 +1,9 @@
+node_modules
+dist
+
+# Local environment files (keep your Google API key out of git)
+.env
+.env.local
+.env.*.local
+
+.DS_Store

@@ -1,0 +1,3 @@
+slack_user_id,name,email,role,joined
+UEXAMPLE123,Example Exec,exec@mit.edu,exec,2026-09-01
+UEXAMPLE456,Example Member,member@mit.edu,general,2026-09-02

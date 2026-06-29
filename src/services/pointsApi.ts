@@ -1,0 +1,75 @@
+import { pointsConfig } from "@/config";
+import type { AuthMember, PointEntry } from "@/types";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POINTS BACKEND CLIENT
+// Login uses the standard "Sign in with Slack" (OpenID Connect) flow:
+//   1. startLogin()  → send the member straight to Slack's sign-in page.
+//   2. Slack returns them to this website with a ?code=… in the URL.
+//   3. exchangeCodeFromUrl() hands that code to the backend (which holds the
+//      secret), gets back a signed session token, and stores it.
+//   4. fetchMe() reads the member + points using that token.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TOKEN_KEY = "shpe_session_token";
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+// Where Slack sends the member back to. Defaults to this site's own address
+// (origin + base path). Must match the Slack app's Redirect URL exactly.
+function redirectUri(): string {
+  return pointsConfig.siteUrl || window.location.origin + import.meta.env.BASE_URL;
+}
+
+// Step 1 — send the member straight to Slack to sign in.
+export function startLogin(): void {
+  const params = new URLSearchParams({
+    response_type: "code",
+    scope: "openid email profile",
+    client_id: pointsConfig.slackClientId,
+    redirect_uri: redirectUri(),
+  });
+  window.location.href = `https://slack.com/openid/connect/authorize?${params.toString()}`;
+}
+
+// Step 3 — if Slack returned us here with ?code=…, swap it for a session token.
+// Returns the token, or null if there was no code in the URL.
+export async function exchangeCodeFromUrl(): Promise<string | null> {
+  const code = new URLSearchParams(window.location.search).get("code");
+  if (!code) return null;
+
+  // Clear the code from the address bar right away.
+  history.replaceState(null, "", window.location.pathname);
+
+  const url = `${pointsConfig.apiUrl}?action=exchange&code=${encodeURIComponent(code)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Login failed (${res.status}).`);
+  const data = await res.json();
+  if (!data.ok || !data.token) throw new Error(data.error || "Login failed.");
+  setToken(data.token);
+  return data.token as string;
+}
+
+export interface MeResponse {
+  ok: boolean;
+  error?: string;
+  member?: AuthMember;
+  points?: number;
+  entries?: PointEntry[];
+}
+
+// Step 4 — load the logged-in member, their total points, and their history.
+export async function fetchMe(token: string): Promise<MeResponse> {
+  const url = `${pointsConfig.apiUrl}?action=me&token=${encodeURIComponent(token)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Request failed (${res.status}).`);
+  return res.json();
+}
