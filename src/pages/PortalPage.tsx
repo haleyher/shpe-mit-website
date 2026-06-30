@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Calendar, Clock, TrendingUp, Users, CheckCircle, Check, X, Plus, Search, Loader2 } from "lucide-react";
 import {
   getToken,
-  listEvents,
   requestPoints,
+  listExecs,
   listPending,
   reviewEntry,
   createEvent,
@@ -11,7 +11,7 @@ import {
   syncForms,
 } from "@/services/pointsApi";
 import { eventCategoryColors } from "@/data/events";
-import type { AuthMember, EventItem, LeaderboardData, LeaderboardRow, PendingRequest, PointEntry, PortalTab } from "@/types";
+import type { AuthMember, LeaderboardData, LeaderboardRow, PendingRequest, PointEntry, PortalTab } from "@/types";
 
 // The logged-in Member Portal (live data from the Google Sheet backend).
 //  • Overview        — your points + history (all members)
@@ -157,76 +157,67 @@ function OverviewTab({ points, pct, approvedCount, pendingCount, entriesCount, r
 
 // ── Request Points tab ────────────────────────────────────────────────────────
 function RequestTab({ token, onRefresh }: { token: string; onRefresh: () => void }) {
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  // Per-event status: "loading" | "done" | an error message.
-  const [reqState, setReqState] = useState<Record<string, string>>({});
+  const [execs, setExecs] = useState<string[]>([]);
+  const [form, setForm] = useState({ eventName: "", verifier: "", note: "" });
+  const [submitting, setSubmitting] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    listEvents(token)
-      .then((evs) => { if (active) { setEvents(evs); setError(null); } })
-      .catch((e) => { if (active) setError(e instanceof Error ? e.message : "Couldn't load events."); })
-      .finally(() => { if (active) setLoading(false); });
+    listExecs(token).then((x) => { if (active) setExecs(x); }).catch(() => {});
     return () => { active = false; };
   }, [token]);
 
-  const handleRequest = async (eventId: string) => {
-    setReqState((s) => ({ ...s, [eventId]: "loading" }));
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.eventName.trim()) return;
+    setSubmitting(true);
+    setMsg(null);
     try {
-      await requestPoints(token, eventId, "");
-      setReqState((s) => ({ ...s, [eventId]: "done" }));
+      await requestPoints(token, form);
+      setMsg({ ok: true, text: "Request submitted! An exec will review it soon." });
+      setForm({ eventName: "", verifier: "", note: "" });
       onRefresh();
-    } catch (e) {
-      setReqState((s) => ({ ...s, [eventId]: e instanceof Error ? e.message : "Failed." }));
+    } catch (err) {
+      setMsg({ ok: false, text: err instanceof Error ? err.message : "Couldn't submit your request." });
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="max-w-xl">
+      <div className="mb-6">
         <h2 className="text-3xl font-bold text-[#001F5B] uppercase mb-2" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Request Points</h2>
-        <p className="text-muted-foreground text-sm">Pick an event you attended and submit a request. An exec will review and approve it.</p>
+        <p className="text-muted-foreground text-sm">Came in late or didn't get marked for something? Tell us what you attended and who can vouch for you — an exec will review and assign the points.</p>
       </div>
 
-      {loading && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 size={16} className="animate-spin" /> Loading events…</div>}
-      {error && !loading && <div className="text-sm text-muted-foreground">{error}</div>}
-      {!loading && !error && events.length === 0 && (
-        <div className="text-sm text-muted-foreground">No events yet. Check back once an exec adds some.</div>
-      )}
-
-      <div className="grid md:grid-cols-2 gap-4">
-        {events.map((ev) => {
-          const state = reqState[ev.event_id];
-          const done = state === "done";
-          const busy = state === "loading";
-          const errMsg = state && state !== "done" && state !== "loading" ? state : null;
-          return (
-            <div key={ev.event_id} className="bg-[#f8f8f7] border border-border p-6 flex flex-col">
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <h3 className="font-bold text-[#001F5B] text-lg leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{ev.name}</h3>
-                {ev.category && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 text-white flex-shrink-0" style={{ backgroundColor: eventCategoryColors[ev.category] || "#999" }}>{ev.category}</span>
-                )}
-              </div>
-              <div className="text-xs text-muted-foreground mb-4">
-                {ev.date ? formatDate(ev.date) || ev.date : "Date TBA"} · <span className="text-[#FD652F] font-semibold">{ev.points} pts</span>
-              </div>
-              <button
-                onClick={() => handleRequest(ev.event_id)}
-                disabled={busy || done}
-                className={`mt-auto w-full py-2.5 text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2 ${done ? "bg-[#2D8A4E] text-white cursor-default" : "bg-[#FD652F] text-white hover:bg-[#D33A02] disabled:opacity-60"}`}
-              >
-                {busy && <Loader2 size={14} className="animate-spin" />}
-                {done ? <><Check size={14} /> Requested</> : busy ? "Requesting…" : "Request Points"}
-              </button>
-              {errMsg && <div className="text-xs text-red-500 mt-2">{errMsg}</div>}
-            </div>
-          );
-        })}
-      </div>
+      <form onSubmit={submit} className="bg-[#f8f8f7] border border-border p-6 flex flex-col gap-4">
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Event name</label>
+          <input value={form.eventName} onChange={(e) => setForm({ ...form, eventName: e.target.value })} placeholder="e.g. GBM #3, Resume Workshop…" className="w-full px-3 py-2.5 text-sm border border-border bg-white focus:outline-none focus:border-[#FD652F]" required />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Who can verify you were there?</label>
+          <select value={form.verifier} onChange={(e) => setForm({ ...form, verifier: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-border bg-white focus:outline-none focus:border-[#FD652F]" required>
+            <option value="">Select an exec…</option>
+            {execs.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+          {execs.length === 0 && <div className="text-xs text-muted-foreground mt-1">No execs listed yet.</div>}
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Details (optional)</label>
+          <textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} rows={2} placeholder="Anything that helps the exec confirm it" className="w-full px-3 py-2.5 text-sm border border-border bg-white focus:outline-none focus:border-[#FD652F] resize-none" />
+        </div>
+        <button type="submit" disabled={submitting} className="w-full py-3 text-sm font-medium bg-[#FD652F] text-white hover:bg-[#D33A02] disabled:opacity-60 transition-all flex items-center justify-center gap-2">
+          {submitting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} {submitting ? "Submitting…" : "Submit Request"}
+        </button>
+        {msg && (
+          <div className={`text-xs flex items-center gap-1 ${msg.ok ? "text-[#2D8A4E]" : "text-red-500"}`}>
+            {msg.ok && <CheckCircle size={12} />} {msg.text}
+          </div>
+        )}
+      </form>
     </div>
   );
 }
@@ -237,6 +228,7 @@ function ManageTab({ token, onRefresh }: { token: string; onRefresh: () => void 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [pointsById, setPointsById] = useState<Record<string, string>>({}); // exec-entered points per request
 
   const [form, setForm] = useState({ name: "", date: "", points: "", category: "", passcode: "" });
   const [savingEvent, setSavingEvent] = useState(false);
@@ -272,7 +264,8 @@ function ManageTab({ token, onRefresh }: { token: string; onRefresh: () => void 
   const handleReview = async (entryId: string, decision: "approve" | "reject") => {
     setBusyId(entryId);
     try {
-      await reviewEntry(token, entryId, decision);
+      const pts = decision === "approve" ? Number(pointsById[entryId]) : undefined;
+      await reviewEntry(token, entryId, decision, pts);
       setPending((p) => p.filter((x) => String(x.entry_id) !== String(entryId)));
       onRefresh();
     } catch (e) {
@@ -309,23 +302,32 @@ function ManageTab({ token, onRefresh }: { token: string; onRefresh: () => void 
           <div className="text-sm text-muted-foreground bg-[#f8f8f7] border border-border p-6">🎉 All caught up — no pending requests.</div>
         )}
         <div className="flex flex-col gap-3">
-          {pending.map((p) => (
-            <div key={p.entry_id} className="bg-[#f8f8f7] border border-border p-4 flex items-center gap-4">
-              <div className="w-12 text-center flex-shrink-0">
-                <div className="text-xl font-bold text-[#FD652F] leading-none" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{p.points}</div>
-                <div className="text-xs text-muted-foreground uppercase">pts</div>
+          {pending.map((p) => {
+            const id = String(p.entry_id);
+            const pts = pointsById[id];
+            const validPts = pts !== undefined && pts !== "" && !isNaN(Number(pts));
+            const busy = busyId === id;
+            return (
+              <div key={p.entry_id} className="bg-[#f8f8f7] border border-border p-4 flex items-center gap-4 flex-wrap">
+                <div className="flex-1 min-w-[140px]">
+                  <div className="font-medium text-[#001F5B] truncate">{p.member_name}</div>
+                  <div className="text-xs text-muted-foreground truncate">{p.event_name}{p.note ? ` · ${p.note}` : ""}</div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <input
+                    type="number"
+                    min="0"
+                    value={pts ?? ""}
+                    onChange={(e) => setPointsById((s) => ({ ...s, [id]: e.target.value }))}
+                    placeholder="pts"
+                    className="w-16 px-2 py-1.5 text-xs border border-border bg-white focus:outline-none focus:border-[#FD652F]"
+                  />
+                  <button onClick={() => handleReview(id, "approve")} disabled={busy || !validPts} title={!validPts ? "Enter a point value first" : "Approve"} className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-[#2D8A4E] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"><Check size={13} /> Approve</button>
+                  <button onClick={() => handleReview(id, "reject")} disabled={busy} className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-border text-muted-foreground hover:border-red-400 hover:text-red-500 disabled:opacity-50 transition-colors"><X size={13} /> Reject</button>
+                </div>
               </div>
-              <div className="h-8 w-px bg-border flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-[#001F5B] truncate">{p.member_name}</div>
-                <div className="text-xs text-muted-foreground truncate">{p.event_name}{p.note ? ` · "${p.note}"` : ""}</div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button onClick={() => handleReview(String(p.entry_id), "approve")} disabled={busyId === String(p.entry_id)} className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-[#2D8A4E] text-white hover:opacity-90 disabled:opacity-50 transition-opacity"><Check size={13} /> Approve</button>
-                <button onClick={() => handleReview(String(p.entry_id), "reject")} disabled={busyId === String(p.entry_id)} className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-border text-muted-foreground hover:border-red-400 hover:text-red-500 disabled:opacity-50 transition-colors"><X size={13} /> Reject</button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

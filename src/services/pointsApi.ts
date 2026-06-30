@@ -93,8 +93,18 @@ export async function listEvents(token: string): Promise<EventItem[]> {
   return data.events || [];
 }
 
-export async function requestPoints(token: string, eventId: string, note: string): Promise<void> {
-  await apiGet({ action: "requestPoints", token, eventId, note });
+// Submit a free-text point request (event name + who can verify + optional note).
+export async function requestPoints(
+  token: string,
+  req: { eventName: string; verifier: string; note: string },
+): Promise<void> {
+  await apiGet({ action: "requestPoints", token, ...req });
+}
+
+// List exec names for the "who can verify" dropdown.
+export async function listExecs(token: string): Promise<string[]> {
+  const data = await apiGet({ action: "execs", token });
+  return data.execs || [];
 }
 
 export async function listPending(token: string): Promise<PendingRequest[]> {
@@ -102,8 +112,16 @@ export async function listPending(token: string): Promise<PendingRequest[]> {
   return data.pending || [];
 }
 
-export async function reviewEntry(token: string, entryId: string, decision: "approve" | "reject"): Promise<void> {
-  await apiGet({ action: "review", token, entryId, decision });
+// Approve (with a point value) or reject a pending request.
+export async function reviewEntry(
+  token: string,
+  entryId: string,
+  decision: "approve" | "reject",
+  points?: number,
+): Promise<void> {
+  const params: Record<string, string> = { action: "review", token, entryId, decision };
+  if (points != null && !isNaN(points)) params.points = String(points);
+  await apiGet(params);
 }
 
 export async function createEvent(

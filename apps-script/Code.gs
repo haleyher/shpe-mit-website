@@ -60,12 +60,13 @@ function doGet(e) {
     if (action === 'me')            return json_(handleMe_(e));
     if (action === 'events')        return json_(handleEvents_(e));
     if (action === 'requestpoints') return json_(handleRequestPoints_(e));
+    if (action === 'execs')         return json_(handleExecs_(e));
     if (action === 'pending')       return json_(handlePending_(e));
     if (action === 'review')        return json_(handleReview_(e));
     if (action === 'createevent')   return json_(handleCreateEvent_(e));
     if (action === 'leaderboard')   return json_(handleLeaderboard_(e));
     if (action === 'sync')          return json_(handleSync_(e));
-    return json_({ ok: true, service: 'shpe-points', actions: ['exchange', 'me', 'events', 'requestPoints', 'pending', 'review', 'createEvent', 'leaderboard', 'sync'] });
+    return json_({ ok: true, service: 'shpe-points', actions: ['exchange', 'me', 'events', 'requestPoints', 'execs', 'pending', 'review', 'createEvent', 'leaderboard', 'sync'] });
   } catch (err) {
     return json_({ ok: false, error: String((err && err.message) || err) });
   }
@@ -130,19 +131,33 @@ function handleEvents_(e) {
   return { ok: true, events: rows_(TABS.EVENTS) };
 }
 
-// A member requests points for an event → a PENDING entry for an exec to approve.
+// A member submits a free-text point request (event name + who can verify) →
+// a PENDING entry tied to their profile. Points start at 0; the exec sets the
+// point value when they approve.
 function handleRequestPoints_(e) {
   const auth = requireAuth_(e);
-  const eventId = e.parameter.eventId;
-  if (!eventId) throw new Error('Missing eventId.');
-  const ev = rows_(TABS.EVENTS).find(function (x) { return String(x.event_id) === String(eventId); });
-  if (!ev) throw new Error('Event not found.');
+  const eventName = String(e.parameter.eventName || '').trim();
+  if (!eventName) throw new Error('Please enter the event name.');
+  const verifier = String(e.parameter.verifier || '').trim();
+  const extra = String(e.parameter.note || '').trim();
+  // Avoid an accidental duplicate of the same event by the same person.
   const dup = entriesForEmail_(auth.email).find(function (x) {
-    return String(x.event_id) === String(eventId) && x.status !== 'rejected';
+    return String(x.event_id).trim().toLowerCase() === eventName.toLowerCase() && x.status !== 'rejected';
   });
-  if (dup) throw new Error('You already have a request for this event.');
-  appendEntry_(auth.email, eventId, Number(ev.points || 0), 'pending', 'self_request', '', e.parameter.note || '', new Date());
+  if (dup) throw new Error('You already have a request for "' + eventName + '".');
+  const note = verifier ? ('Verify: ' + verifier + (extra ? ' — ' + extra : '')) : extra;
+  appendEntry_(auth.email, eventName, 0, 'pending', 'self_request', '', note, new Date());
   return { ok: true };
+}
+
+// Any logged-in member: list exec names (for the "who can verify" dropdown).
+function handleExecs_(e) {
+  requireAuth_(e);
+  const execs = rows_(TABS.MEMBERS)
+    .filter(function (m) { return String(m.role).toLowerCase() === 'exec' && String(m.name || '').trim(); })
+    .map(function (m) { return String(m.name).trim(); })
+    .sort();
+  return { ok: true, execs: execs };
 }
 
 // Exec only: pending requests (with member + event names) for the review queue.
@@ -167,14 +182,15 @@ function handlePending_(e) {
   };
 }
 
-// Exec only: approve or reject a pending request.
+// Exec only: approve (with a point value) or reject a pending request.
 function handleReview_(e) {
   const auth = requireExec_(e);
   const entryId = e.parameter.entryId;
   const decision = (e.parameter.decision || '').toLowerCase();
   if (!entryId) throw new Error('Missing entryId.');
   if (decision !== 'approve' && decision !== 'reject') throw new Error('Invalid decision.');
-  const ok = updateEntryStatus_(entryId, decision === 'approve' ? 'approved' : 'rejected', auth.email);
+  const points = (e.parameter.points != null && e.parameter.points !== '') ? Number(e.parameter.points) : null;
+  const ok = updateEntryStatus_(entryId, decision === 'approve' ? 'approved' : 'rejected', auth.email, points);
   if (!ok) throw new Error('Request not found.');
   return { ok: true };
 }
@@ -370,13 +386,14 @@ function appendEntry_(email, eventId, points, status, source, reviewedBy, note, 
     normEmail_(email), eventId, points, status, source, reviewedBy || '', note || '', createdAt || new Date(),
   ]);
 }
-function updateEntryStatus_(entryId, status, reviewedBy) {
+function updateEntryStatus_(entryId, status, reviewedBy, points) {
   const sh = sheet_(TABS.ENTRIES);
   const data = sh.getDataRange().getValues();
   for (let r = 1; r < data.length; r++) {
     if (String(data[r][0]) === String(entryId)) {
       sh.getRange(r + 1, 5).setValue(status);     // status column
       sh.getRange(r + 1, 7).setValue(reviewedBy); // reviewed_by column
+      if (points != null && !isNaN(points)) sh.getRange(r + 1, 4).setValue(points); // points column
       return true;
     }
   }
