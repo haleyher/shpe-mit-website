@@ -322,12 +322,18 @@ function findMemberByEmail_(email) {
 // Match by email. On Slack login, fill in slack_user_id / name if we didn't have them.
 function upsertMemberByEmail_(email, name, slackUserId) {
   email = normEmail_(email);
+  const localPart = email.split('@')[0]; // their kerb
   const sh = sheet_(TABS.MEMBERS);
   const data = sh.getDataRange().getValues(); // [email, name, role, slack_user_id, joined]
   for (let r = 1; r < data.length; r++) {
     if (normEmail_(data[r][0]) === email) {
       if (slackUserId && !data[r][3]) sh.getRange(r + 1, 4).setValue(slackUserId);
-      if (name && !data[r][1]) sh.getRange(r + 1, 2).setValue(name);
+      // Fix names: if the stored name is blank, or "kerb-looking" (someone typed
+      // their kerb instead of their name in a form), replace it with the real
+      // name from their Slack login. Leave a proper name alone.
+      const cur = String(data[r][1] || '');
+      const looksLikeKerb = cur && cur.indexOf(' ') < 0 && cur.toLowerCase() === localPart;
+      if (name && (!cur || looksLikeKerb)) { sh.getRange(r + 1, 2).setValue(name); data[r][1] = name; }
       return { email: email, name: data[r][1] || name, role: data[r][2] || 'general', slack_user_id: data[r][3] || slackUserId || '' };
     }
   }
