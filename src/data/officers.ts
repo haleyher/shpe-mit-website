@@ -23,10 +23,10 @@ import evan from "@/assets/images/exec/evan.jpg";
 export const execBoard: Officer[] = [
   { name: "Carlos Nuñez-Sosa", photo: carlos, role: "President", major: "Computation & Cognition", year: "Class of 2028", initials: "CN", email: "shpe-mit@mit.edu" },
   { name: "Haley Hernandez", role: "Vice President", major: "AI & Decision-Making", year: "Class of 2028", initials: "HH", email: "shpe-mit@mit.edu" },
-  { name: "Maria Taveras", role: "Secretary", major: "Mechanical Engineering", year: "Class of 2029", initials: "MT", email: "shpe-mit@mit.edu" },
-  { name: "Isabel Duran", role: "Treasurer", major: "Mechanical Engineering", year: "Class of 2028", initials: "ID", email: "shpe-mit@mit.edu" },
+  { name: "Maria Taveras", role: "Secretary", major: "Electrical Engineering with Computing", year: "Class of 2029", initials: "MT", email: "shpe-mit@mit.edu" },
+  { name: "Isabel Duran", role: "Treasurer", major: "Electrical Engineering with Computing", year: "Class of 2028", initials: "ID", email: "shpe-mit@mit.edu" },
   { name: "Fatima Hernandez", role: "External Affairs", major: "Mechanical Engineering", year: "Class of 2027", initials: "FH", email: "shpe-mit@mit.edu" },
-  { name: "Evan Cabrera", photo: evan, role: "Social Chair", major: "Electrical Engineering + Physics", year: "Class of 2029", initials: "EC", email: "shpe-mit@mit.edu" },
+  { name: "Evan Cabrera", photo: evan, role: "Social Chair", major: "Electrical Engineering with Computing & Physics", year: "Class of 2029", initials: "EC", email: "shpe-mit@mit.edu" },
   { name: "Cristopher Miranda", role: "Professional Development", major: "Mechanical Engineering", year: "Class of 2027", initials: "CM", email: "shpe-mit@mit.edu" },
   { name: "Montserrat Diaz-Botello", role: "Professional Development", major: "Mechanical Engineering", year: "Class of 2029", initials: "MD", email: "shpe-mit@mit.edu" },
   { name: "Emma Martinez", photo: emma, role: "Community Service", major: "Mechanical Engineering", year: "Class of 2029", initials: "EM", email: "shpe-comm-serve@mit.edu" },
