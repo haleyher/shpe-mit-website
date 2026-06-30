@@ -29,7 +29,7 @@ export const pointsConfig = {
   // The Apps Script web-app URL (ends in /exec).
   apiUrl:
     import.meta.env.VITE_POINTS_API_URL ||
-    "https://script.google.com/macros/s/AKfycbyTQv8qZP8Veh6QW5ujXkeVfFiSAZF_iWgI3sot5xxkncxV1U1dRlh0NVKj6wlkQaM/exec",
+    "https://script.google.com/macros/s/AKfycbw04ftrzt15IW8gQqLePk33yPllShpbu3oMMTJzgy3RjcHi1r1prITYMPNMABT5E34/exec",
   // Slack app Client ID (public — safe to keep here). Used to start the login.
   slackClientId: import.meta.env.VITE_SLACK_CLIENT_ID || "2566533801857.11466251218710",
   // Where Slack sends members back after login. This MUST match, character-for-
