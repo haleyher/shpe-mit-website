@@ -7,9 +7,8 @@ import type { NavLink } from "@/types";
 // ─────────────────────────────────────────────────────────────────────────────
 export const navLinks: NavLink[] = [
   { label: "About", page: "about" },
-  { label: "Events", page: "events" },
-  { label: "Convention", page: "convention" },
   { label: "Exec", page: "exec" },
+  { label: "Convention", page: "convention" },
   { label: "CommServ", page: "commserv" },
   { label: "Sponsors", page: "sponsors" },
   { label: "Contact", page: "contact" },
