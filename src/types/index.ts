@@ -17,7 +17,22 @@ export type Page =
   | "contact";
 
 /** Tabs shown inside the logged-in Member Portal. */
-export type PortalTab = "overview" | "request" | "manage";
+export type PortalTab = "overview" | "request" | "leaderboard" | "manage";
+
+/** One row of the points leaderboard. */
+export interface LeaderboardRow {
+  rank: number;
+  slackUserId: string;
+  name: string;
+  points: number;
+}
+
+/** Leaderboard payload: execs get `full`; general members get `top` + `me`. */
+export interface LeaderboardData {
+  full?: LeaderboardRow[];
+  top?: LeaderboardRow[];
+  me?: LeaderboardRow | null;
+}
 
 /** An event members can request points for (see apps-script Events tab). */
 export interface EventItem {

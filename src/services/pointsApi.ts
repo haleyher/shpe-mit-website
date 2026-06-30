@@ -1,5 +1,5 @@
 import { pointsConfig } from "@/config";
-import type { AuthMember, EventItem, PendingRequest, PointEntry } from "@/types";
+import type { AuthMember, EventItem, LeaderboardData, PendingRequest, PointEntry } from "@/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POINTS BACKEND CLIENT
@@ -111,4 +111,9 @@ export async function createEvent(
   ev: { name: string; date: string; points: string; category: string },
 ): Promise<void> {
   await apiGet({ action: "createEvent", token, ...ev });
+}
+
+export async function fetchLeaderboard(token: string): Promise<LeaderboardData> {
+  const data = await apiGet({ action: "leaderboard", token });
+  return { full: data.full, top: data.top, me: data.me };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Calendar, Clock, TrendingUp, Users, CheckCircle, Check, X, Plus, Loader2 } from "lucide-react";
+import { Calendar, Clock, TrendingUp, Users, CheckCircle, Check, X, Plus, Search, Loader2 } from "lucide-react";
 import {
   getToken,
   listEvents,
@@ -7,9 +7,10 @@ import {
   listPending,
   reviewEntry,
   createEvent,
+  fetchLeaderboard,
 } from "@/services/pointsApi";
 import { eventCategoryColors } from "@/data/events";
-import type { AuthMember, EventItem, PendingRequest, PointEntry, PortalTab } from "@/types";
+import type { AuthMember, EventItem, LeaderboardData, LeaderboardRow, PendingRequest, PointEntry, PortalTab } from "@/types";
 
 // The logged-in Member Portal (live data from the Google Sheet backend).
 //  • Overview        — your points + history (all members)
@@ -55,6 +56,7 @@ export function PortalPage({
   const tabs: { id: PortalTab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "request", label: "Request Points" },
+    { id: "leaderboard", label: "Leaderboard" },
     ...(isExec ? [{ id: "manage" as PortalTab, label: "Review & Events" }] : []),
   ];
 
@@ -87,6 +89,7 @@ export function PortalPage({
           <OverviewTab points={points} pct={pct} approvedCount={approvedCount} pendingCount={pendingCount} entriesCount={entries.length} role={member.role} history={history} />
         )}
         {activeTab === "request" && <RequestTab token={token} onRefresh={onRefresh} />}
+        {activeTab === "leaderboard" && <LeaderboardTab token={token} currentUid={member.slackUserId} />}
         {activeTab === "manage" && isExec && <ManageTab token={token} onRefresh={onRefresh} />}
       </div>
     </div>
@@ -324,6 +327,79 @@ function ManageTab({ token, onRefresh }: { token: string; onRefresh: () => void 
           </button>
           {eventMsg && <div className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle size={12} className="text-[#2D8A4E]" /> {eventMsg}</div>}
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Leaderboard tab ───────────────────────────────────────────────────────────
+function LeaderboardTab({ token, currentUid }: { token: string; currentUid: string }) {
+  const [data, setData] = useState<LeaderboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    fetchLeaderboard(token)
+      .then((d) => { if (active) { setData(d); setError(null); } })
+      .catch((e) => { if (active) setError(e instanceof Error ? e.message : "Couldn't load the leaderboard."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [token]);
+
+  if (loading) return <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 size={16} className="animate-spin" /> Loading leaderboard…</div>;
+  if (error) return <div className="text-sm text-muted-foreground">{error}</div>;
+  if (!data) return null;
+
+  const isExec = !!data.full;
+  const rows = isExec
+    ? (data.full || []).filter((r) => r.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : (data.top || []);
+  const me = data.me;
+  const meInTop = !isExec && (data.top || []).some((r) => String(r.slackUserId) === String(currentUid));
+
+  return (
+    <div className="max-w-3xl">
+      <div className="mb-6">
+        <h2 className="text-3xl font-bold text-[#001F5B] uppercase mb-2" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Leaderboard</h2>
+        <p className="text-muted-foreground text-sm">{isExec ? "Everyone's points, ranked. Search by name." : "Top 10 members this semester — and where you stand."}</p>
+      </div>
+
+      {isExec && (
+        <div className="relative mb-4">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search members…" className="w-full pl-9 pr-3 py-2.5 text-sm border border-border bg-[#f8f8f7] focus:outline-none focus:border-[#FD652F]" />
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        {rows.map((r) => <LeaderRow key={r.slackUserId} row={r} highlight={String(r.slackUserId) === String(currentUid)} />)}
+        {rows.length === 0 && <div className="text-sm text-muted-foreground">No members found.</div>}
+      </div>
+
+      {/* General member not in the top 10: show their own rank below. */}
+      {!isExec && me && !meInTop && (
+        <div className="mt-4 pt-4 border-t border-border">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Your Ranking</div>
+          <LeaderRow row={me} highlight />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LeaderRow({ row, highlight }: { row: LeaderboardRow; highlight?: boolean }) {
+  const medal = row.rank === 1 ? "#C9A227" : row.rank === 2 ? "#8A8D91" : row.rank === 3 ? "#B06A34" : null;
+  return (
+    <div className={`flex items-center gap-4 p-3 border transition-colors ${highlight ? "border-[#FD652F] bg-accent" : "border-border bg-[#f8f8f7]"}`}>
+      <div className="w-10 text-center flex-shrink-0">
+        <span className="text-lg font-bold" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: medal || "#001F5B" }}>#{row.rank}</span>
+      </div>
+      <div className="flex-1 min-w-0 font-medium text-[#001F5B] truncate">{row.name}{highlight ? " (you)" : ""}</div>
+      <div className="flex-shrink-0 font-bold text-[#FD652F]" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+        {row.points} <span className="text-xs text-muted-foreground font-normal">pts</span>
       </div>
     </div>
   );
