@@ -108,7 +108,7 @@ export async function reviewEntry(token: string, entryId: string, decision: "app
 
 export async function createEvent(
   token: string,
-  ev: { name: string; date: string; points: string; category: string },
+  ev: { name: string; date: string; points: string; category: string; passcode: string },
 ): Promise<void> {
   await apiGet({ action: "createEvent", token, ...ev });
 }
@@ -116,4 +116,10 @@ export async function createEvent(
 export async function fetchLeaderboard(token: string): Promise<LeaderboardData> {
   const data = await apiGet({ action: "leaderboard", token });
   return { full: data.full, top: data.top, me: data.me };
+}
+
+// Pull all GBM form responses into the ledger. Returns how many were added.
+export async function syncForms(token: string): Promise<{ added: number; newEvents: number; newMembers: number }> {
+  const data = await apiGet({ action: "sync", token });
+  return { added: data.added || 0, newEvents: data.newEvents || 0, newMembers: data.newMembers || 0 };
 }

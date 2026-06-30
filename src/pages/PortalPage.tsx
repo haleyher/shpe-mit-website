@@ -8,6 +8,7 @@ import {
   reviewEntry,
   createEvent,
   fetchLeaderboard,
+  syncForms,
 } from "@/services/pointsApi";
 import { eventCategoryColors } from "@/data/events";
 import type { AuthMember, EventItem, LeaderboardData, LeaderboardRow, PendingRequest, PointEntry, PortalTab } from "@/types";
@@ -89,7 +90,7 @@ export function PortalPage({
           <OverviewTab points={points} pct={pct} approvedCount={approvedCount} pendingCount={pendingCount} entriesCount={entries.length} role={member.role} history={history} />
         )}
         {activeTab === "request" && <RequestTab token={token} onRefresh={onRefresh} />}
-        {activeTab === "leaderboard" && <LeaderboardTab token={token} currentUid={member.slackUserId} />}
+        {activeTab === "leaderboard" && <LeaderboardTab token={token} currentEmail={member.email} />}
         {activeTab === "manage" && isExec && <ManageTab token={token} onRefresh={onRefresh} />}
       </div>
     </div>
@@ -237,9 +238,26 @@ function ManageTab({ token, onRefresh }: { token: string; onRefresh: () => void 
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const [form, setForm] = useState({ name: "", date: "", points: "", category: "" });
+  const [form, setForm] = useState({ name: "", date: "", points: "", category: "", passcode: "" });
   const [savingEvent, setSavingEvent] = useState(false);
   const [eventMsg, setEventMsg] = useState<string | null>(null);
+
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const r = await syncForms(token);
+      setSyncMsg(`Synced ${r.added} new attendance${r.added === 1 ? "" : "s"}` + (r.newMembers ? ` · ${r.newMembers} new member${r.newMembers === 1 ? "" : "s"}` : "") + ".");
+      onRefresh();
+    } catch (e) {
+      setSyncMsg(e instanceof Error ? e.message : "Sync failed.");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const loadPending = () => {
     setLoading(true);
@@ -272,7 +290,7 @@ function ManageTab({ token, onRefresh }: { token: string; onRefresh: () => void 
     try {
       await createEvent(token, form);
       setEventMsg(`Added "${form.name}".`);
-      setForm({ name: "", date: "", points: "", category: "" });
+      setForm({ name: "", date: "", points: "", category: "", passcode: "" });
     } catch (err) {
       setEventMsg(err instanceof Error ? err.message : "Couldn't add the event.");
     } finally {
@@ -311,29 +329,45 @@ function ManageTab({ token, onRefresh }: { token: string; onRefresh: () => void 
         </div>
       </div>
 
-      {/* Add event */}
-      <div className="lg:col-span-1">
-        <h2 className="text-2xl font-bold text-[#001F5B] uppercase mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Add Event</h2>
-        <form onSubmit={handleAddEvent} className="bg-[#f8f8f7] border border-border p-6 flex flex-col gap-3">
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Event name" className="w-full px-3 py-2 text-sm border border-border bg-white focus:outline-none focus:border-[#FD652F]" required />
-          <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full px-3 py-2 text-sm border border-border bg-white focus:outline-none focus:border-[#FD652F] text-muted-foreground" />
-          <input type="number" min="0" value={form.points} onChange={(e) => setForm({ ...form, points: e.target.value })} placeholder="Points (e.g. 10)" className="w-full px-3 py-2 text-sm border border-border bg-white focus:outline-none focus:border-[#FD652F]" required />
-          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full px-3 py-2 text-sm border border-border bg-white focus:outline-none focus:border-[#FD652F]">
-            <option value="">Category…</option>
-            {Object.keys(eventCategoryColors).map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <button type="submit" disabled={savingEvent} className="w-full py-2.5 text-sm font-medium bg-[#FD652F] text-white hover:bg-[#D33A02] disabled:opacity-60 transition-all flex items-center justify-center gap-2">
-            {savingEvent ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {savingEvent ? "Adding…" : "Add Event"}
-          </button>
-          {eventMsg && <div className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle size={12} className="text-[#2D8A4E]" /> {eventMsg}</div>}
-        </form>
+      {/* Add event + GBM form sync */}
+      <div className="lg:col-span-1 flex flex-col gap-6">
+        {/* Sync GBM forms */}
+        <div>
+          <h2 className="text-2xl font-bold text-[#001F5B] uppercase mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>GBM Forms</h2>
+          <div className="bg-[#001F5B] p-6 text-white">
+            <p className="text-white/70 text-xs leading-relaxed mb-4">Pull attendance from the GBM Google Forms (listed in the FormSources tab) into the points ledger. Each passcode becomes an event; duplicates are skipped.</p>
+            <button onClick={handleSync} disabled={syncing} className="w-full py-2.5 text-sm font-medium bg-[#FD652F] text-white hover:bg-[#D33A02] disabled:opacity-60 transition-all flex items-center justify-center gap-2">
+              {syncing ? <Loader2 size={14} className="animate-spin" /> : <TrendingUp size={14} />} {syncing ? "Syncing…" : "Sync GBM Forms"}
+            </button>
+            {syncMsg && <div className="text-xs text-white/80 mt-3 flex items-center gap-1"><CheckCircle size={12} className="text-[#FD652F]" /> {syncMsg}</div>}
+          </div>
+        </div>
+
+        {/* Add event manually */}
+        <div>
+          <h2 className="text-2xl font-bold text-[#001F5B] uppercase mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Add Event</h2>
+          <form onSubmit={handleAddEvent} className="bg-[#f8f8f7] border border-border p-6 flex flex-col gap-3">
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Event name" className="w-full px-3 py-2 text-sm border border-border bg-white focus:outline-none focus:border-[#FD652F]" required />
+            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full px-3 py-2 text-sm border border-border bg-white focus:outline-none focus:border-[#FD652F] text-muted-foreground" />
+            <input type="number" min="0" value={form.points} onChange={(e) => setForm({ ...form, points: e.target.value })} placeholder="Points (e.g. 10)" className="w-full px-3 py-2 text-sm border border-border bg-white focus:outline-none focus:border-[#FD652F]" required />
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full px-3 py-2 text-sm border border-border bg-white focus:outline-none focus:border-[#FD652F]">
+              <option value="">Category…</option>
+              {Object.keys(eventCategoryColors).map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <input value={form.passcode} onChange={(e) => setForm({ ...form, passcode: e.target.value })} placeholder="Form passcode (optional)" className="w-full px-3 py-2 text-sm border border-border bg-white focus:outline-none focus:border-[#FD652F]" />
+            <button type="submit" disabled={savingEvent} className="w-full py-2.5 text-sm font-medium bg-[#FD652F] text-white hover:bg-[#D33A02] disabled:opacity-60 transition-all flex items-center justify-center gap-2">
+              {savingEvent ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {savingEvent ? "Adding…" : "Add Event"}
+            </button>
+            {eventMsg && <div className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle size={12} className="text-[#2D8A4E]" /> {eventMsg}</div>}
+          </form>
+        </div>
       </div>
     </div>
   );
 }
 
 // ── Leaderboard tab ───────────────────────────────────────────────────────────
-function LeaderboardTab({ token, currentUid }: { token: string; currentUid: string }) {
+function LeaderboardTab({ token, currentEmail }: { token: string; currentEmail: string }) {
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -358,7 +392,8 @@ function LeaderboardTab({ token, currentUid }: { token: string; currentUid: stri
     ? (data.full || []).filter((r) => r.name.toLowerCase().includes(query.trim().toLowerCase()))
     : (data.top || []);
   const me = data.me;
-  const meInTop = !isExec && (data.top || []).some((r) => String(r.slackUserId) === String(currentUid));
+  const norm = (s: string) => s.trim().toLowerCase();
+  const meInTop = !isExec && (data.top || []).some((r) => norm(r.email) === norm(currentEmail));
 
   return (
     <div className="max-w-3xl">
@@ -375,7 +410,7 @@ function LeaderboardTab({ token, currentUid }: { token: string; currentUid: stri
       )}
 
       <div className="flex flex-col gap-2">
-        {rows.map((r) => <LeaderRow key={r.slackUserId} row={r} highlight={String(r.slackUserId) === String(currentUid)} />)}
+        {rows.map((r) => <LeaderRow key={r.email} row={r} highlight={norm(r.email) === norm(currentEmail)} />)}
         {rows.length === 0 && <div className="text-sm text-muted-foreground">No members found.</div>}
       </div>
 

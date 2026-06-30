@@ -2,43 +2,57 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * SHPE MIT — Points backend  (Google Apps Script)
  * ─────────────────────────────────────────────────────────────────────────────
- * This is the small server that sits between the website / Slack and the Google
- * Sheet "database." It is NOT part of the website build — you paste it into a
- * Google Apps Script project and deploy it as a Web App. See SETUP.md.
+ * The small server between the website and the Google Sheet "database."
+ * Paste it into a Google Apps Script project and deploy as a Web App (SETUP.md).
  *
- * Secrets are NEVER stored in this file. They live in Project Settings →
- * Script Properties (see cfg() below and SETUP.md).
+ * IDENTITY: everyone is keyed by their lowercased MIT email. That's the join key
+ * between the website (Slack login → MIT email) and the GBM Google Forms (which
+ * collect MIT email). Secrets live in Script Properties, never in this file.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-// Tab names in the spreadsheet.
-const TABS = { MEMBERS: 'Members', EVENTS: 'Events', ENTRIES: 'Entries' };
+const TABS = { MEMBERS: 'Members', EVENTS: 'Events', ENTRIES: 'Entries', FORMSOURCES: 'FormSources' };
 
-// ── Config (read from Script Properties so nothing secret is in the code) ──────
+const HEADERS = {
+  Members:     ['email', 'name', 'role', 'slack_user_id', 'joined'],
+  Events:      ['event_id', 'passcode', 'name', 'date', 'points', 'category', 'created_by'],
+  Entries:     ['entry_id', 'email', 'event_id', 'points', 'status', 'source', 'reviewed_by', 'note', 'created_at'],
+  FormSources: ['spreadsheet_id', 'sheet_name', 'default_points'],
+};
+
+// ── Config (Script Properties — nothing secret in code) ───────────────────────
 function cfg(key) {
   const v = PropertiesService.getScriptProperties().getProperty(key);
   if (!v) throw new Error('Missing Script Property: ' + key + ' (set it in Project Settings).');
   return v;
 }
 
-/**
- * Run this ONCE from the Apps Script editor (select `setup` → Run) to create the
- * three tabs with their headers. Safe to run again — it won't overwrite data.
- */
+// Run ONCE from the editor to create any missing tabs with their headers.
+// Safe to re-run — it never touches existing data.
 function setup() {
   const ss = SpreadsheetApp.openById(cfg('SHEET_ID'));
-  ensureTab_(ss, TABS.MEMBERS, ['slack_user_id', 'name', 'email', 'role', 'joined']);
-  ensureTab_(ss, TABS.EVENTS,  ['event_id', 'name', 'date', 'points', 'category', 'created_by']);
-  ensureTab_(ss, TABS.ENTRIES, ['entry_id', 'slack_user_id', 'event_id', 'points', 'status', 'source', 'reviewed_by', 'note', 'created_at']);
+  Object.keys(HEADERS).forEach(function (name) {
+    let sh = ss.getSheetByName(name);
+    if (!sh) sh = ss.insertSheet(name);
+    if (sh.getLastRow() === 0) sh.appendRow(HEADERS[name]);
+  });
 }
-function ensureTab_(ss, name, headers) {
-  let sh = ss.getSheetByName(name);
-  if (!sh) sh = ss.insertSheet(name);
-  if (sh.getLastRow() === 0) sh.appendRow(headers);
+
+// DANGER: wipes the Members / Events / Entries tabs and recreates fresh headers.
+// Use once when the schema changes (it erases test data — not real data).
+function resetSchema() {
+  const ss = SpreadsheetApp.openById(cfg('SHEET_ID'));
+  ['Members', 'Events', 'Entries'].forEach(function (name) {
+    let sh = ss.getSheetByName(name);
+    if (sh) sh.clear();
+    else sh = ss.insertSheet(name);
+    sh.appendRow(HEADERS[name]);
+  });
+  let fs = ss.getSheetByName('FormSources');
+  if (!fs) { fs = ss.insertSheet('FormSources'); fs.appendRow(HEADERS.FormSources); }
 }
 
 // ── HTTP entry point ──────────────────────────────────────────────────────────
-// The website reaches the script through this. We route on ?action=...
 function doGet(e) {
   const action = ((e && e.parameter && e.parameter.action) || '').toLowerCase();
   try {
@@ -50,16 +64,14 @@ function doGet(e) {
     if (action === 'review')        return json_(handleReview_(e));
     if (action === 'createevent')   return json_(handleCreateEvent_(e));
     if (action === 'leaderboard')   return json_(handleLeaderboard_(e));
-    return json_({ ok: true, service: 'shpe-points', actions: ['exchange', 'me', 'events', 'requestPoints', 'pending', 'review', 'createEvent', 'leaderboard'] });
+    if (action === 'sync')          return json_(handleSync_(e));
+    return json_({ ok: true, service: 'shpe-points', actions: ['exchange', 'me', 'events', 'requestPoints', 'pending', 'review', 'createEvent', 'leaderboard', 'sync'] });
   } catch (err) {
     return json_({ ok: false, error: String((err && err.message) || err) });
   }
 }
 
 // ── "Sign in with Slack" (OpenID Connect) ─────────────────────────────────────
-// The website sends Slack's one-time `code` here; we exchange it for the user's
-// identity (server-side, using the secret), upsert their member row, and return
-// a signed session token as JSON.
 function handleExchange_(e) {
   const code = e.parameter.code;
   if (!code) throw new Error('Missing code.');
@@ -71,7 +83,7 @@ function handleExchange_(e) {
       client_secret: cfg('SLACK_CLIENT_SECRET'),
       code: code,
       grant_type: 'authorization_code',
-      redirect_uri: cfg('SITE_URL'), // must match what the website used
+      redirect_uri: cfg('SITE_URL'),
     },
     muteHttpExceptions: true,
   });
@@ -79,64 +91,61 @@ function handleExchange_(e) {
   if (!data.ok) throw new Error('Slack token exchange failed: ' + (data.error || 'unknown'));
 
   const claims = parseJwt_(data.id_token);
-  const slackUserId = claims['https://slack.com/user_id'];
-  if (!slackUserId) throw new Error('Could not read Slack user id from login.');
+  const slackUserId = claims['https://slack.com/user_id'] || '';
+  const email = normEmail_(claims['email']);
+  if (!email) throw new Error('Your Slack account has no email, so we can\'t sign you in.');
 
-  // Optional gate: if SLACK_TEAM_ID is set, only allow members of that workspace.
+  // Optional gate: only allow the SHPE MIT Slack workspace.
   const teamId = PropertiesService.getScriptProperties().getProperty('SLACK_TEAM_ID');
   if (teamId && claims['https://slack.com/team_id'] !== teamId) {
     throw new Error('Please sign in with your SHPE MIT Slack account.');
   }
 
-  const member = upsertMember_(slackUserId, claims['name'] || '', claims['email'] || '');
-  return { ok: true, token: signToken_({ uid: slackUserId, role: member.role }) };
+  const member = upsertMemberByEmail_(email, claims['name'] || '', slackUserId);
+  return { ok: true, token: signToken_({ email: email, role: member.role }) };
 }
 
-// ── Authenticated read: who am I + my points ──────────────────────────────────
+// ── Read: who am I + my points/history ────────────────────────────────────────
 function handleMe_(e) {
   const auth = requireAuth_(e);
-  const member = findMember_(auth.uid);
+  const member = findMemberByEmail_(auth.email);
   if (!member) throw new Error('Member not found.');
 
-  const entries = entriesForMember_(auth.uid);
+  const entries = entriesForEmail_(auth.email);
   const points = entries
     .filter(function (x) { return x.status === 'approved'; })
     .reduce(function (sum, x) { return sum + Number(x.points || 0); }, 0);
 
   return {
     ok: true,
-    member: { slackUserId: member.slack_user_id, name: member.name, email: member.email, role: member.role },
+    member: { email: member.email, name: member.name, role: member.role, slackUserId: member.slack_user_id },
     points: points,
     entries: entries,
   };
 }
 
-// ── Phase 2: events + point requests + exec review ────────────────────────────
-
-// Any logged-in member: list all events (to pick from when requesting points).
+// ── Events + point requests + exec review ─────────────────────────────────────
 function handleEvents_(e) {
   requireAuth_(e);
   return { ok: true, events: rows_(TABS.EVENTS) };
 }
 
-// A member requests points for an event → creates a PENDING entry for an exec
-// to approve. The point value comes from the event itself.
+// A member requests points for an event → a PENDING entry for an exec to approve.
 function handleRequestPoints_(e) {
   const auth = requireAuth_(e);
   const eventId = e.parameter.eventId;
   if (!eventId) throw new Error('Missing eventId.');
   const ev = rows_(TABS.EVENTS).find(function (x) { return String(x.event_id) === String(eventId); });
   if (!ev) throw new Error('Event not found.');
-  // Don't allow a duplicate request for the same event (unless the old one was rejected).
-  const dup = entriesForMember_(auth.uid).find(function (x) {
+  const dup = entriesForEmail_(auth.email).find(function (x) {
     return String(x.event_id) === String(eventId) && x.status !== 'rejected';
   });
   if (dup) throw new Error('You already have a request for this event.');
-  appendEntry_(auth.uid, eventId, Number(ev.points || 0), 'pending', 'self_request', '', e.parameter.note || '');
+  appendEntry_(auth.email, eventId, Number(ev.points || 0), 'pending', 'self_request', '', e.parameter.note || '', new Date());
   return { ok: true };
 }
 
-// Exec only: list pending requests (with member + event names) for the review queue.
+// Exec only: pending requests (with member + event names) for the review queue.
 function handlePending_(e) {
   requireExec_(e);
   const members = rows_(TABS.MEMBERS);
@@ -145,11 +154,11 @@ function handlePending_(e) {
   return {
     ok: true,
     pending: pending.map(function (x) {
-      const m = members.find(function (mm) { return String(mm.slack_user_id) === String(x.slack_user_id); });
+      const m = members.find(function (mm) { return normEmail_(mm.email) === normEmail_(x.email); });
       const ev = events.find(function (ee) { return String(ee.event_id) === String(x.event_id); });
       return {
         entry_id: x.entry_id,
-        member_name: m ? m.name : x.slack_user_id,
+        member_name: m ? m.name : x.email,
         event_name: ev ? ev.name : x.event_id,
         points: x.points,
         note: x.note,
@@ -165,51 +174,123 @@ function handleReview_(e) {
   const decision = (e.parameter.decision || '').toLowerCase();
   if (!entryId) throw new Error('Missing entryId.');
   if (decision !== 'approve' && decision !== 'reject') throw new Error('Invalid decision.');
-  const ok = updateEntryStatus_(entryId, decision === 'approve' ? 'approved' : 'rejected', auth.uid);
+  const ok = updateEntryStatus_(entryId, decision === 'approve' ? 'approved' : 'rejected', auth.email);
   if (!ok) throw new Error('Request not found.');
   return { ok: true };
 }
 
-// Exec only: add a new event that members can then request points for.
+// Exec only: add an event (optionally with a passcode that matches a GBM form).
 function handleCreateEvent_(e) {
   const auth = requireExec_(e);
   const name = e.parameter.name;
   if (!name) throw new Error('Missing event name.');
-  const eventId = 'EVT-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+  const eventId = 'EVT-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
   sheet_(TABS.EVENTS).appendRow([
-    eventId, name, e.parameter.date || '', Number(e.parameter.points || 0), e.parameter.category || '', auth.uid,
+    eventId, e.parameter.passcode || '', name, e.parameter.date || '',
+    Number(e.parameter.points || 0), e.parameter.category || '', auth.email,
   ]);
   return { ok: true, event_id: eventId };
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
-// General members see the top 10 + their own rank; exec sees the full ranked list.
 function handleLeaderboard_(e) {
   const auth = requireAuth_(e);
   const totals = {};
   rows_(TABS.ENTRIES).forEach(function (x) {
     if (x.status === 'approved') {
-      totals[x.slack_user_id] = (totals[x.slack_user_id] || 0) + Number(x.points || 0);
+      const k = normEmail_(x.email);
+      totals[k] = (totals[k] || 0) + Number(x.points || 0);
     }
   });
   const board = rows_(TABS.MEMBERS).map(function (m) {
-    return { slackUserId: m.slack_user_id, name: m.name, points: totals[m.slack_user_id] || 0 };
+    return { email: normEmail_(m.email), name: m.name, points: totals[normEmail_(m.email)] || 0 };
   }).sort(function (a, b) { return b.points - a.points; });
   board.forEach(function (row, i) { row.rank = i + 1; });
 
-  if (auth.role === 'exec') {
-    return { ok: true, full: board };
-  }
-  const me = board.find(function (r) { return String(r.slackUserId) === String(auth.uid); }) || null;
+  if (auth.role === 'exec') return { ok: true, full: board };
+  const me = board.find(function (r) { return r.email === normEmail_(auth.email); }) || null;
   return { ok: true, top: board.slice(0, 10), me: me };
+}
+
+// ── GBM form sync (Model A: forms funnel into the ledger) ─────────────────────
+function handleSync_(e) {
+  requireExec_(e);
+  return syncForms_();
+}
+
+// Pulls every row from every spreadsheet listed in the FormSources tab and turns
+// it into an approved entry. Each unique passcode becomes an event. Deduped by
+// (email + event). Reads/writes in batch so it stays fast.
+// Form columns expected: Timestamp | Passcode | Full Name | MIT Email.
+function syncForms_() {
+  const ss = SpreadsheetApp.openById(cfg('SHEET_ID'));
+  const defaultGlobal = Number(PropertiesService.getScriptProperties().getProperty('DEFAULT_EVENT_POINTS') || 5);
+
+  // Snapshot existing state once.
+  const eventsByPass = {};
+  rows_(TABS.EVENTS).forEach(function (ev) {
+    const p = String(ev.passcode || '').trim().toLowerCase();
+    if (p) eventsByPass[p] = ev;
+  });
+  const seen = {};
+  rows_(TABS.ENTRIES).forEach(function (x) { seen[normEmail_(x.email) + '|' + x.event_id] = true; });
+  const memberEmails = {};
+  rows_(TABS.MEMBERS).forEach(function (m) { memberEmails[normEmail_(m.email)] = true; });
+
+  const newEvents = [], newMembers = [], newEntries = [];
+  let added = 0;
+
+  rows_(TABS.FORMSOURCES).forEach(function (src) {
+    const id = String(src.spreadsheet_id || '').trim();
+    if (!id) return;
+    let formSs;
+    try { formSs = SpreadsheetApp.openById(id); } catch (err) { return; } // skip if not shared with us
+    const name = String(src.sheet_name || '').trim();
+    const sh = name ? formSs.getSheetByName(name) : formSs.getSheets()[0];
+    if (!sh) return;
+    const data = sh.getDataRange().getValues();
+    const defPoints = Number(src.default_points || defaultGlobal);
+
+    for (let r = 1; r < data.length; r++) {
+      const ts = data[r][0] || new Date();
+      const passcode = String(data[r][1] || '').trim();
+      const fullName = String(data[r][2] || '').trim();
+      const email = normEmail_(data[r][3]);
+      if (!passcode || !email) continue;
+
+      const pkey = passcode.toLowerCase();
+      let ev = eventsByPass[pkey];
+      if (!ev) {
+        const eventId = 'EVT-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+        ev = { event_id: eventId, passcode: passcode, name: passcode, points: defPoints };
+        eventsByPass[pkey] = ev;
+        newEvents.push([eventId, passcode, passcode, '', defPoints, 'GBM', 'form-sync']);
+      }
+      if (!memberEmails[email]) {
+        memberEmails[email] = true;
+        newMembers.push([email, fullName, 'general', '', new Date()]);
+      }
+      const key = email + '|' + ev.event_id;
+      if (seen[key]) continue;
+      seen[key] = true;
+      newEntries.push(['ENT-' + Date.now() + '-' + Math.floor(Math.random() * 100000), email, ev.event_id, Number(ev.points || defPoints), 'approved', 'form', 'form-sync', '', ts]);
+      added++;
+    }
+  });
+
+  appendRows_(ss.getSheetByName(TABS.EVENTS), newEvents);
+  appendRows_(ss.getSheetByName(TABS.MEMBERS), newMembers);
+  appendRows_(ss.getSheetByName(TABS.ENTRIES), newEntries);
+  return { ok: true, added: added, newEvents: newEvents.length, newMembers: newMembers.length };
 }
 
 // ── Spreadsheet helpers ───────────────────────────────────────────────────────
 function sheet_(name) { return SpreadsheetApp.openById(cfg('SHEET_ID')).getSheetByName(name); }
 
-// Reads a tab into an array of {header: value} objects.
 function rows_(name) {
-  const values = sheet_(name).getDataRange().getValues();
+  const sh = sheet_(name);
+  const values = sh.getDataRange().getValues();
+  if (values.length < 2) return [];
   const headers = values.shift();
   return values.map(function (r) {
     const o = {};
@@ -217,28 +298,40 @@ function rows_(name) {
     return o;
   });
 }
-function findMember_(uid) {
-  return rows_(TABS.MEMBERS).find(function (m) { return String(m.slack_user_id) === String(uid); }) || null;
+function appendRows_(sh, rowsToAdd) {
+  if (rowsToAdd && rowsToAdd.length) {
+    sh.getRange(sh.getLastRow() + 1, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
+  }
 }
-// First time someone logs in, create their row as a "general" member.
-// To make someone exec, open the sheet and change their role to "exec".
-function upsertMember_(uid, name, email) {
-  const existing = findMember_(uid);
-  if (existing) return existing;
-  sheet_(TABS.MEMBERS).appendRow([uid, name, email, 'general', new Date()]);
-  return { slack_user_id: uid, name: name, email: email, role: 'general' };
+function findMemberByEmail_(email) {
+  const key = normEmail_(email);
+  return rows_(TABS.MEMBERS).find(function (m) { return normEmail_(m.email) === key; }) || null;
 }
-function entriesForMember_(uid) {
-  return rows_(TABS.ENTRIES).filter(function (x) { return String(x.slack_user_id) === String(uid); });
+// Match by email. On Slack login, fill in slack_user_id / name if we didn't have them.
+function upsertMemberByEmail_(email, name, slackUserId) {
+  email = normEmail_(email);
+  const sh = sheet_(TABS.MEMBERS);
+  const data = sh.getDataRange().getValues(); // [email, name, role, slack_user_id, joined]
+  for (let r = 1; r < data.length; r++) {
+    if (normEmail_(data[r][0]) === email) {
+      if (slackUserId && !data[r][3]) sh.getRange(r + 1, 4).setValue(slackUserId);
+      if (name && !data[r][1]) sh.getRange(r + 1, 2).setValue(name);
+      return { email: email, name: data[r][1] || name, role: data[r][2] || 'general', slack_user_id: data[r][3] || slackUserId || '' };
+    }
+  }
+  sh.appendRow([email, name || '', 'general', slackUserId || '', new Date()]);
+  return { email: email, name: name || '', role: 'general', slack_user_id: slackUserId || '' };
 }
-// Add a row to the Entries ledger.
-function appendEntry_(uid, eventId, points, status, source, reviewedBy, note) {
+function entriesForEmail_(email) {
+  const key = normEmail_(email);
+  return rows_(TABS.ENTRIES).filter(function (x) { return normEmail_(x.email) === key; });
+}
+function appendEntry_(email, eventId, points, status, source, reviewedBy, note, createdAt) {
   sheet_(TABS.ENTRIES).appendRow([
-    'ENT-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-    uid, eventId, points, status, source, reviewedBy || '', note || '', new Date(),
+    'ENT-' + Date.now() + '-' + Math.floor(Math.random() * 100000),
+    normEmail_(email), eventId, points, status, source, reviewedBy || '', note || '', createdAt || new Date(),
   ]);
 }
-// Find an entry by id and update its status + who reviewed it.
 function updateEntryStatus_(entryId, status, reviewedBy) {
   const sh = sheet_(TABS.ENTRIES);
   const data = sh.getDataRange().getValues();
@@ -252,7 +345,7 @@ function updateEntryStatus_(entryId, status, reviewedBy) {
   return false;
 }
 
-// ── Stateless signed session tokens (no storage / no backlog) ─────────────────
+// ── Stateless signed session tokens ───────────────────────────────────────────
 function signToken_(obj) {
   obj.exp = Date.now() + 1000 * 60 * 60 * 24 * 30; // valid 30 days
   const body = Utilities.base64EncodeWebSafe(JSON.stringify(obj));
@@ -275,7 +368,6 @@ function requireAuth_(e) {
   if (!payload) throw new Error('Not logged in (invalid or expired session).');
   return payload;
 }
-// Used to gate exec-only actions.
 function requireExec_(e) {
   const payload = requireAuth_(e);
   if (payload.role !== 'exec') throw new Error('Exec only.');
@@ -283,6 +375,7 @@ function requireExec_(e) {
 }
 
 // ── Small utilities ───────────────────────────────────────────────────────────
+function normEmail_(s) { return String(s || '').trim().toLowerCase(); }
 function parseJwt_(jwt) {
   let p = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
   while (p.length % 4) p += '=';

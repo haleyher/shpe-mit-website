@@ -22,7 +22,7 @@ export type PortalTab = "overview" | "request" | "leaderboard" | "manage";
 /** One row of the points leaderboard. */
 export interface LeaderboardRow {
   rank: number;
-  slackUserId: string;
+  email: string;
   name: string;
   points: number;
 }
