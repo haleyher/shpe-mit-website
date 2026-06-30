@@ -21,6 +21,11 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [justLoggedIn, setJustLoggedIn] = useState(false);
+  // True while we're finishing a fresh Slack login (the slow code-exchange step),
+  // so the UI can show a "Signing you in…" screen instead of looking frozen.
+  const [loggingIn, setLoggingIn] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("code")
+  );
 
   useEffect(() => {
     let active = true;
@@ -51,7 +56,7 @@ export function useAuth() {
       } catch (e) {
         if (active) setError(e instanceof Error ? e.message : "Couldn't reach the member system.");
       } finally {
-        if (active) setLoading(false);
+        if (active) { setLoading(false); setLoggingIn(false); }
       }
     })();
 
@@ -71,6 +76,7 @@ export function useAuth() {
     points,
     entries,
     loading,
+    loggingIn,
     error,
     justLoggedIn,
     isLoggedIn: !!member,

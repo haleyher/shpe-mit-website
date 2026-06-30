@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { Navbar } from "@/layouts/Navbar";
 import { Footer } from "@/layouts/Footer";
 import { LoginModal } from "@/components/LoginModal";
@@ -26,7 +27,7 @@ import type { Page } from "@/types";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const { member, points, entries, isLoggedIn, justLoggedIn, login, logout } = useAuth();
+  const { member, points, entries, isLoggedIn, justLoggedIn, loggingIn, login, logout } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [isPortal, setIsPortal] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
@@ -71,6 +72,19 @@ export default function App() {
       default: return <HomePage onNavigate={navigate} />;
     }
   };
+
+  // Full-screen "Signing you in…" while we finish a fresh Slack login.
+  if (loggingIn) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-5 bg-[#001F5B] px-6 text-center" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+        <Loader2 size={40} className="text-[#FD652F] animate-spin" />
+        <div>
+          <div className="text-white font-bold text-2xl uppercase" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Signing you in…</div>
+          <div className="text-white/60 text-sm mt-1">Connecting your SHPE MIT account</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background" style={{ fontFamily: "'DM Sans', sans-serif" }}>
