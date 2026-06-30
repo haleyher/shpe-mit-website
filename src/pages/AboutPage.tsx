@@ -5,6 +5,7 @@ import family1 from "@/assets/images/about/family1.jpg";
 import family2 from "@/assets/images/about/family2.jpg";
 import family3 from "@/assets/images/about/family3.jpg";
 import family4 from "@/assets/images/about/family4.jpg";
+import family5 from "@/assets/images/about/family5.jpg";
 
 // The "About" page. All copy lives in src/data/about.ts.
 // The <ImagePlaceholder> blocks are spots for photos — see that component for
@@ -51,10 +52,11 @@ export function AboutPage() {
             <div className="h-px w-8 bg-[#72A9BE]" />
             <span className="text-xs font-medium text-[#72A9BE] uppercase tracking-widest">La Familia</span>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <ImagePlaceholder src={family2} ratio="aspect-[4/3]" alt="SHPE MIT moment" />
             <ImagePlaceholder src={family3} ratio="aspect-[4/3]" alt="SHPE MIT moment" />
             <ImagePlaceholder src={family4} ratio="aspect-[4/3]" alt="SHPE MIT moment" />
+            <ImagePlaceholder src={family5} ratio="aspect-[4/3]" alt="SHPE MIT moment" />
           </div>
         </div>
 

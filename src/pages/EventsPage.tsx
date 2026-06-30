@@ -4,7 +4,6 @@ import { FeaturedEventCard } from "@/components/FeaturedEventCard";
 import { ImagePlaceholder } from "@/components/ImagePlaceholder";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import events1 from "@/assets/images/events/events1.jpg";
-import events2 from "@/assets/images/events/events2.jpg";
 
 // The "Events" page: a big interactive calendar plus a sidebar with the next
 // featured event and a newsletter sign-up. Events are loaded once here from
@@ -52,10 +51,7 @@ export function EventsPage() {
             <p className="text-muted-foreground leading-relaxed mb-4">We love bringing people together. Throughout the year we host <span className="font-semibold text-[#001F5B]">mixers</span> with other affinity and engineering communities — NSBE, Mujeres Latinas, Engineers Without Borders, and more — to build friendships across MIT.</p>
             <p className="text-muted-foreground leading-relaxed">And each year we throw a big <span className="font-semibold text-[#001F5B]">formal</span> for the local Boston SHPE chapters. Past celebrations have included <span className="italic">Gala Gigante</span> and <span className="italic">SHPE on a Ship</span> — nights to dress up, dance, and celebrate our community.</p>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <ImagePlaceholder src={events1} ratio="aspect-[3/4]" alt="SHPE MIT social" />
-            <ImagePlaceholder src={events2} ratio="aspect-[3/4]" alt="SHPE MIT formal" />
-          </div>
+          <ImagePlaceholder src={events1} ratio="aspect-[4/3]" alt="SHPE MIT social" />
         </div>
       </section>
     </div>
