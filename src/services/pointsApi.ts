@@ -1,5 +1,5 @@
 import { pointsConfig } from "@/config";
-import type { AuthMember, PointEntry } from "@/types";
+import type { AuthMember, EventItem, PendingRequest, PointEntry } from "@/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POINTS BACKEND CLIENT
@@ -73,4 +73,42 @@ export async function fetchMe(token: string): Promise<MeResponse> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Request failed (${res.status}).`);
   return res.json();
+}
+
+// ── Phase 2: events, point requests, and exec review ──────────────────────────
+
+// Shared GET helper. The session token authenticates; a cache-buster keeps the
+// browser from serving a stale response. Throws with the backend's error message.
+async function apiGet(params: Record<string, string>): Promise<any> {
+  const query = new URLSearchParams({ ...params, _: String(Date.now()) });
+  const res = await fetch(`${pointsConfig.apiUrl}?${query.toString()}`);
+  if (!res.ok) throw new Error(`Request failed (${res.status}).`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || "Something went wrong.");
+  return data;
+}
+
+export async function listEvents(token: string): Promise<EventItem[]> {
+  const data = await apiGet({ action: "events", token });
+  return data.events || [];
+}
+
+export async function requestPoints(token: string, eventId: string, note: string): Promise<void> {
+  await apiGet({ action: "requestPoints", token, eventId, note });
+}
+
+export async function listPending(token: string): Promise<PendingRequest[]> {
+  const data = await apiGet({ action: "pending", token });
+  return data.pending || [];
+}
+
+export async function reviewEntry(token: string, entryId: string, decision: "approve" | "reject"): Promise<void> {
+  await apiGet({ action: "review", token, entryId, decision });
+}
+
+export async function createEvent(
+  token: string,
+  ev: { name: string; date: string; points: string; category: string },
+): Promise<void> {
+  await apiGet({ action: "createEvent", token, ...ev });
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   clearToken,
   exchangeCodeFromUrl,
@@ -6,13 +6,14 @@ import {
   getToken,
   startLogin,
 } from "@/services/pointsApi";
+import type { MeResponse } from "@/services/pointsApi";
 import type { AuthMember, PointEntry } from "@/types";
 
 // Manages member authentication for the website:
 //  • finishes the Slack login if we just came back with a ?code=…
 //  • otherwise reuses a stored session token
 //  • loads the member + their points from the backend
-//  • exposes login() / logout()
+//  • exposes login() / logout() / refresh()
 // This is the single source of truth the Navbar + Member Portal consume.
 export function useAuth() {
   const [member, setMember] = useState<AuthMember | null>(null);
@@ -27,6 +28,31 @@ export function useAuth() {
     () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("code")
   );
 
+  // Apply a /me response to state (or log out if the token is no longer valid).
+  const applyMe = useCallback((res: MeResponse) => {
+    if (res.ok && res.member) {
+      setMember(res.member);
+      setPoints(res.points ?? 0);
+      setEntries(res.entries ?? []);
+      setError(null);
+    } else {
+      clearToken();
+      setMember(null);
+      setError(res.error ?? null);
+    }
+  }, []);
+
+  // Re-load the member's points/history (call after a write succeeds).
+  const refresh = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+    try {
+      applyMe(await fetchMe(token));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't refresh your points.");
+    }
+  }, [applyMe]);
+
   useEffect(() => {
     let active = true;
 
@@ -40,19 +66,7 @@ export function useAuth() {
         if (!token) return;
 
         const res = await fetchMe(token);
-        if (!active) return;
-
-        if (res.ok && res.member) {
-          setMember(res.member);
-          setPoints(res.points ?? 0);
-          setEntries(res.entries ?? []);
-          setError(null);
-        } else {
-          // Token invalid/expired — drop it so they can log in again.
-          clearToken();
-          setMember(null);
-          setError(res.error ?? null);
-        }
+        if (active) applyMe(res);
       } catch (e) {
         if (active) setError(e instanceof Error ? e.message : "Couldn't reach the member system.");
       } finally {
@@ -61,7 +75,7 @@ export function useAuth() {
     })();
 
     return () => { active = false; };
-  }, []);
+  }, [applyMe]);
 
   const logout = () => {
     clearToken();
@@ -82,5 +96,6 @@ export function useAuth() {
     isLoggedIn: !!member,
     login: startLogin,
     logout,
+    refresh,
   };
 }

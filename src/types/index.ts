@@ -17,7 +17,26 @@ export type Page =
   | "contact";
 
 /** Tabs shown inside the logged-in Member Portal. */
-export type PortalTab = "overview" | "calendar" | "committees" | "join";
+export type PortalTab = "overview" | "request" | "manage";
+
+/** An event members can request points for (see apps-script Events tab). */
+export interface EventItem {
+  event_id: string;
+  name: string;
+  date: string;
+  points: number;
+  category: string;
+  created_by?: string;
+}
+
+/** A pending point request in the exec review queue. */
+export interface PendingRequest {
+  entry_id: string | number;
+  member_name: string;
+  event_name: string;
+  points: number;
+  note?: string;
+}
 
 /** The logged-in member, returned by the backend's `me` endpoint. */
 export interface AuthMember {

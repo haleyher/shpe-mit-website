@@ -27,7 +27,7 @@ import type { Page } from "@/types";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const { member, points, entries, isLoggedIn, justLoggedIn, loggingIn, login, logout } = useAuth();
+  const { member, points, entries, isLoggedIn, justLoggedIn, loggingIn, login, logout, refresh } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [isPortal, setIsPortal] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
@@ -59,7 +59,7 @@ export default function App() {
 
   const renderPage = () => {
     if (isPortal && isLoggedIn && member) {
-      return <PortalPage member={member} points={points} entries={entries} />;
+      return <PortalPage member={member} points={points} entries={entries} onRefresh={refresh} />;
     }
     switch (currentPage) {
       case "about": return <AboutPage />;

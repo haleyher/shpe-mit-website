@@ -46,9 +46,14 @@ function ensureTab_(ss, name, headers) {
 function doGet(e) {
   const action = ((e && e.parameter && e.parameter.action) || '').toLowerCase();
   try {
-    if (action === 'exchange') return json_(handleExchange_(e));
-    if (action === 'me')       return json_(handleMe_(e));
-    return json_({ ok: true, service: 'shpe-points', actions: ['exchange', 'me'] });
+    if (action === 'exchange')      return json_(handleExchange_(e));
+    if (action === 'me')            return json_(handleMe_(e));
+    if (action === 'events')        return json_(handleEvents_(e));
+    if (action === 'requestpoints') return json_(handleRequestPoints_(e));
+    if (action === 'pending')       return json_(handlePending_(e));
+    if (action === 'review')        return json_(handleReview_(e));
+    if (action === 'createevent')   return json_(handleCreateEvent_(e));
+    return json_({ ok: true, service: 'shpe-points', actions: ['exchange', 'me', 'events', 'requestPoints', 'pending', 'review', 'createEvent'] });
   } catch (err) {
     return json_({ ok: false, error: String((err && err.message) || err) });
   }
@@ -113,6 +118,77 @@ function handleMe_(e) {
   };
 }
 
+// ── Phase 2: events + point requests + exec review ────────────────────────────
+
+// Any logged-in member: list all events (to pick from when requesting points).
+function handleEvents_(e) {
+  requireAuth_(e);
+  return { ok: true, events: rows_(TABS.EVENTS) };
+}
+
+// A member requests points for an event → creates a PENDING entry for an exec
+// to approve. The point value comes from the event itself.
+function handleRequestPoints_(e) {
+  const auth = requireAuth_(e);
+  const eventId = e.parameter.eventId;
+  if (!eventId) throw new Error('Missing eventId.');
+  const ev = rows_(TABS.EVENTS).find(function (x) { return String(x.event_id) === String(eventId); });
+  if (!ev) throw new Error('Event not found.');
+  // Don't allow a duplicate request for the same event (unless the old one was rejected).
+  const dup = entriesForMember_(auth.uid).find(function (x) {
+    return String(x.event_id) === String(eventId) && x.status !== 'rejected';
+  });
+  if (dup) throw new Error('You already have a request for this event.');
+  appendEntry_(auth.uid, eventId, Number(ev.points || 0), 'pending', 'self_request', '', e.parameter.note || '');
+  return { ok: true };
+}
+
+// Exec only: list pending requests (with member + event names) for the review queue.
+function handlePending_(e) {
+  requireExec_(e);
+  const members = rows_(TABS.MEMBERS);
+  const events = rows_(TABS.EVENTS);
+  const pending = rows_(TABS.ENTRIES).filter(function (x) { return x.status === 'pending'; });
+  return {
+    ok: true,
+    pending: pending.map(function (x) {
+      const m = members.find(function (mm) { return String(mm.slack_user_id) === String(x.slack_user_id); });
+      const ev = events.find(function (ee) { return String(ee.event_id) === String(x.event_id); });
+      return {
+        entry_id: x.entry_id,
+        member_name: m ? m.name : x.slack_user_id,
+        event_name: ev ? ev.name : x.event_id,
+        points: x.points,
+        note: x.note,
+      };
+    }),
+  };
+}
+
+// Exec only: approve or reject a pending request.
+function handleReview_(e) {
+  const auth = requireExec_(e);
+  const entryId = e.parameter.entryId;
+  const decision = (e.parameter.decision || '').toLowerCase();
+  if (!entryId) throw new Error('Missing entryId.');
+  if (decision !== 'approve' && decision !== 'reject') throw new Error('Invalid decision.');
+  const ok = updateEntryStatus_(entryId, decision === 'approve' ? 'approved' : 'rejected', auth.uid);
+  if (!ok) throw new Error('Request not found.');
+  return { ok: true };
+}
+
+// Exec only: add a new event that members can then request points for.
+function handleCreateEvent_(e) {
+  const auth = requireExec_(e);
+  const name = e.parameter.name;
+  if (!name) throw new Error('Missing event name.');
+  const eventId = 'EVT-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+  sheet_(TABS.EVENTS).appendRow([
+    eventId, name, e.parameter.date || '', Number(e.parameter.points || 0), e.parameter.category || '', auth.uid,
+  ]);
+  return { ok: true, event_id: eventId };
+}
+
 // ── Spreadsheet helpers ───────────────────────────────────────────────────────
 function sheet_(name) { return SpreadsheetApp.openById(cfg('SHEET_ID')).getSheetByName(name); }
 
@@ -139,6 +215,26 @@ function upsertMember_(uid, name, email) {
 }
 function entriesForMember_(uid) {
   return rows_(TABS.ENTRIES).filter(function (x) { return String(x.slack_user_id) === String(uid); });
+}
+// Add a row to the Entries ledger.
+function appendEntry_(uid, eventId, points, status, source, reviewedBy, note) {
+  sheet_(TABS.ENTRIES).appendRow([
+    'ENT-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+    uid, eventId, points, status, source, reviewedBy || '', note || '', new Date(),
+  ]);
+}
+// Find an entry by id and update its status + who reviewed it.
+function updateEntryStatus_(entryId, status, reviewedBy) {
+  const sh = sheet_(TABS.ENTRIES);
+  const data = sh.getDataRange().getValues();
+  for (let r = 1; r < data.length; r++) {
+    if (String(data[r][0]) === String(entryId)) {
+      sh.getRange(r + 1, 5).setValue(status);     // status column
+      sh.getRange(r + 1, 7).setValue(reviewedBy); // reviewed_by column
+      return true;
+    }
+  }
+  return false;
 }
 
 // ── Stateless signed session tokens (no storage / no backlog) ─────────────────
