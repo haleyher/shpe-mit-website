@@ -195,6 +195,8 @@ function handleCreateEvent_(e) {
 // ── Leaderboard ───────────────────────────────────────────────────────────────
 function handleLeaderboard_(e) {
   const auth = requireAuth_(e);
+
+  // Sum approved points per normalized email.
   const totals = {};
   rows_(TABS.ENTRIES).forEach(function (x) {
     if (x.status === 'approved') {
@@ -202,10 +204,28 @@ function handleLeaderboard_(e) {
       totals[k] = (totals[k] || 0) + Number(x.points || 0);
     }
   });
-  const board = rows_(TABS.MEMBERS).map(function (m) {
-    return { email: normEmail_(m.email), name: m.name, points: totals[normEmail_(m.email)] || 0 };
+
+  // Collapse member rows by normalized email (handles kerb-vs-full-email dupes),
+  // preferring a real (spaced) name over a kerb.
+  const names = {};
+  rows_(TABS.MEMBERS).forEach(function (m) {
+    const k = normEmail_(m.email);
+    if (!k) return;
+    const nm = String(m.name || '');
+    if (!(k in names) || (names[k].indexOf(' ') < 0 && nm.indexOf(' ') >= 0)) names[k] = nm;
+  });
+  Object.keys(totals).forEach(function (k) { if (!(k in names)) names[k] = k; });
+
+  const board = Object.keys(names).map(function (k) {
+    return { email: k, name: names[k] || k, points: totals[k] || 0 };
   }).sort(function (a, b) { return b.points - a.points; });
-  board.forEach(function (row, i) { row.rank = i + 1; });
+
+  // Tie-aware ranking: equal points share a rank (e.g. 1, 1, 3, 4, …).
+  let lastPoints = null, lastRank = 0;
+  board.forEach(function (row, i) {
+    if (row.points === lastPoints) { row.rank = lastRank; }
+    else { row.rank = i + 1; lastRank = row.rank; lastPoints = row.points; }
+  });
 
   if (auth.role === 'exec') return { ok: true, full: board };
   const me = board.find(function (r) { return r.email === normEmail_(auth.email); }) || null;
@@ -393,7 +413,13 @@ function requireExec_(e) {
 }
 
 // ── Small utilities ───────────────────────────────────────────────────────────
-function normEmail_(s) { return String(s || '').trim().toLowerCase(); }
+// Normalize an email for matching. A bare kerb (no "@") is treated as the full
+// MIT email, so "arevaloe" and "arevaloe@mit.edu" count as the same person.
+function normEmail_(s) {
+  let e = String(s || '').trim().toLowerCase();
+  if (e && e.indexOf('@') < 0) e += '@mit.edu';
+  return e;
+}
 function parseJwt_(jwt) {
   let p = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
   while (p.length % 4) p += '=';
