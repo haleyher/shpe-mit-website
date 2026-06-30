@@ -10,6 +10,7 @@ export const navLinks: NavLink[] = [
   { label: "Exec", page: "exec" },
   { label: "Convention", page: "convention" },
   { label: "CommServ", page: "commserv" },
+  { label: "Events", page: "events" },
   { label: "Sponsors", page: "sponsors" },
   { label: "Contact", page: "contact" },
 ];
