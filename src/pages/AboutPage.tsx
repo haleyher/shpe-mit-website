@@ -1,6 +1,10 @@
 import { PageHeader } from "@/components/PageHeader";
 import { ImagePlaceholder } from "@/components/ImagePlaceholder";
 import { missionParagraphs, whatWeDo, aboutStats } from "@/data/about";
+import family1 from "@/assets/images/about/family1.jpg";
+import family2 from "@/assets/images/about/family2.jpg";
+import family3 from "@/assets/images/about/family3.jpg";
+import family4 from "@/assets/images/about/family4.jpg";
 
 // The "About" page. All copy lives in src/data/about.ts.
 // The <ImagePlaceholder> blocks are spots for photos — see that component for
@@ -22,7 +26,7 @@ export function AboutPage() {
               <p key={i} className="text-muted-foreground leading-relaxed mb-5 last:mb-0">{p}</p>
             ))}
           </div>
-          <ImagePlaceholder ratio="aspect-[4/3]" label="Add a group photo" alt="SHPE MIT members together" />
+          <ImagePlaceholder src={family1} ratio="aspect-[4/3]" alt="SHPE MIT members together" />
         </div>
 
         {/* What We Do */}
@@ -48,9 +52,9 @@ export function AboutPage() {
             <span className="text-xs font-medium text-[#72A9BE] uppercase tracking-widest">La Familia</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <ImagePlaceholder ratio="aspect-[4/3]" label="Add a photo" alt="SHPE MIT moment" />
-            <ImagePlaceholder ratio="aspect-[4/3]" label="Add a photo" alt="SHPE MIT moment" />
-            <ImagePlaceholder ratio="aspect-[4/3]" label="Add a photo" alt="SHPE MIT moment" />
+            <ImagePlaceholder src={family2} ratio="aspect-[4/3]" alt="SHPE MIT moment" />
+            <ImagePlaceholder src={family3} ratio="aspect-[4/3]" alt="SHPE MIT moment" />
+            <ImagePlaceholder src={family4} ratio="aspect-[4/3]" alt="SHPE MIT moment" />
           </div>
         </div>
 

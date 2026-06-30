@@ -1,7 +1,7 @@
 import type { Officer } from "@/types";
-import carlos from "@/assets/images/carlos2.jpg";
-import emma from "@/assets/images/emma.jpg";
-import evan from "@/assets/images/evan.jpg";
+import carlos from "@/assets/images/exec/carlos.jpg";
+import emma from "@/assets/images/exec/emma.jpg";
+import evan from "@/assets/images/exec/evan.jpg";
 
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,4 +1,8 @@
 import type { WhatWeDoItem } from "@/types";
+import home1 from "@/assets/images/home/home1.jpg";
+import home2 from "@/assets/images/home/home2.jpg";
+import home3 from "@/assets/images/home/home3.jpg";
+import home4 from "@/assets/images/home/home4.jpg";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOME PAGE CONTENT
@@ -44,27 +48,27 @@ export const whatWeDoItems: WhatWeDoItem[] = [
     category: "Community",
     title: "Built on Belonging",
     desc: "A close-knit family of Hispanic engineers at MIT. We celebrate culture, lift each other up, and create a home away from home.",
-    image: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=900&h=700&fit=crop&auto=format",
+    image: home1,
   },
   {
     number: "02",
     category: "Professional Dev",
     title: "Launching STEM Careers",
     desc: "Resume workshops, mock interviews, industry panels, and direct connections to internships and full-time roles in STEM.",
-    image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=900&h=700&fit=crop&auto=format",
+    image: home2,
   },
   {
     number: "03",
     category: "Community Service",
     title: "Giving Back",
     desc: "K-12 STEM outreach, community tutoring, and engineering-for-good projects — bringing opportunity to Greater Boston.",
-    image: "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=900&h=700&fit=crop&auto=format",
+    image: home3,
   },
   {
     number: "04",
     category: "SHPE National",
     title: "Part of Something Bigger",
     desc: "Connected to SHPE chapters and members across the country. Access scholarships, the SHPE National Convention, and a lifelong network.",
-    image: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=900&h=700&fit=crop&auto=format",
+    image: home4,
   },
 ];

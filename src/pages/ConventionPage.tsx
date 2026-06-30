@@ -7,6 +7,11 @@ import {
   conventionSupport,
   conventionCta,
 } from "@/data/convention";
+import conv1 from "@/assets/images/convention/conv1.jpg";
+import conv2 from "@/assets/images/convention/conv2.jpg";
+import conv3 from "@/assets/images/convention/conv3.jpg";
+import conv4 from "@/assets/images/convention/conv4.jpg";
+import conv5 from "@/assets/images/convention/conv5.jpg";
 import type { Page } from "@/types";
 
 // The "Convention" page — explains the SHPE National Convention to new members
@@ -37,7 +42,7 @@ export function ConventionPage({ onNavigate }: { onNavigate: (page: Page) => voi
               <h2 className="text-3xl font-bold text-[#001F5B] uppercase mb-5" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Three Days That Change Careers</h2>
               <p className="text-muted-foreground leading-relaxed text-sm">{conventionIntro}</p>
             </div>
-            <ImagePlaceholder ratio="aspect-[4/3]" label="Add a Convention photo" alt="SHPE MIT at the National Convention" />
+            <ImagePlaceholder src={conv1} ratio="aspect-[4/3]" alt="SHPE MIT at the National Convention" />
           </div>
 
           {/* Why it matters — highlight cards */}
@@ -67,10 +72,10 @@ export function ConventionPage({ onNavigate }: { onNavigate: (page: Page) => voi
               <span className="text-xs font-medium text-[#72A9BE] uppercase tracking-widest">From Past Conventions</span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <ImagePlaceholder ratio="aspect-square" label="Add photo" alt="Convention moment" />
-              <ImagePlaceholder ratio="aspect-square" label="Add photo" alt="Convention moment" />
-              <ImagePlaceholder ratio="aspect-square" label="Add photo" alt="Convention moment" />
-              <ImagePlaceholder ratio="aspect-square" label="Add photo" alt="Convention moment" />
+              <ImagePlaceholder src={conv2} ratio="aspect-square" alt="Convention moment" />
+              <ImagePlaceholder src={conv3} ratio="aspect-square" alt="Convention moment" />
+              <ImagePlaceholder src={conv4} ratio="aspect-square" alt="Convention moment" />
+              <ImagePlaceholder src={conv5} ratio="aspect-square" alt="Convention moment" />
             </div>
           </div>
 

@@ -1,15 +1,22 @@
 import { PageHeader } from "@/components/PageHeader";
 import { ImagePlaceholder } from "@/components/ImagePlaceholder";
 import { commservPurpose, mentorship, nocheDeCiencias } from "@/data/commserv";
+import mentor1 from "@/assets/images/commserv/mentor1.jpg";
+import mentor2 from "@/assets/images/commserv/mentor2.jpg";
+import mentor3 from "@/assets/images/commserv/mentor3.jpg";
+import noche from "@/assets/images/commserv/noche2.jpg";
+import community1 from "@/assets/images/commserv/community1.jpg";
+import community2 from "@/assets/images/commserv/community2.jpg";
+import community3 from "@/assets/images/commserv/community3.jpg";
 
-// The "CommServ" page: three text sections (purpose, mentorship, Noche de
-// Ciencias), with one big feature photo on the Noche de Ciencias section, then a
-// Get Involved call-to-action. Edit the section text in src/data/commserv.ts.
+// The "CommServ" page: three sections (purpose, mentorship, Noche de Ciencias)
+// plus an "In the Community" gallery and a Get Involved call-to-action.
+// Edit the section text in src/data/commserv.ts.
 
 type SectionData = { eyebrow: string; title: string; body: string[] };
 
 // A section: accent eyebrow + heading + paragraphs, with optional content
-// (e.g. a photo) below.
+// (e.g. photos) below.
 function Section({ data, accent, alt, children }: { data: SectionData; accent: string; alt: boolean; children?: React.ReactNode }) {
   return (
     <section className={`py-16 px-6 ${alt ? "bg-muted" : ""}`}>
@@ -39,18 +46,39 @@ export function CommServPage() {
         subtitle="SHPE MIT is committed to giving back — bringing STEM, mentorship, and opportunity to Greater Boston."
       />
 
-      {/* 1 — Purpose */}
+      {/* 1 — Purpose (text only) */}
       <Section data={commservPurpose} accent="#FD652F" alt={false} />
 
-      {/* 2 — Mentorship */}
-      <Section data={mentorship} accent="#0070C0" alt={true} />
+      {/* 2 — Mentorship + photos */}
+      <Section data={mentorship} accent="#0070C0" alt={true}>
+        <div className="grid sm:grid-cols-3 gap-4 mt-8">
+          <ImagePlaceholder src={mentor1} ratio="aspect-[4/3]" alt="MentorSHPE" />
+          <ImagePlaceholder src={mentor2} ratio="aspect-[4/3]" alt="MentorSHPE" />
+          <ImagePlaceholder src={mentor3} ratio="aspect-[4/3]" alt="MentorSHPE" />
+        </div>
+      </Section>
 
       {/* 3 — Noche de Ciencias (one big feature photo) */}
       <Section data={nocheDeCiencias} accent="#72A9BE" alt={false}>
         <div className="mt-10">
-          <ImagePlaceholder ratio="aspect-[2/1]" label="Add the Noche de Ciencias photo" alt="Noche de Ciencias" />
+          <ImagePlaceholder src={noche} ratio="aspect-[2/1]" alt="Noche de Ciencias" />
         </div>
       </Section>
+
+      {/* In the Community — photo gallery */}
+      <section className="py-16 px-6 bg-muted">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="h-px w-8 bg-[#f99323]" />
+            <span className="text-xs font-medium text-[#f99323] uppercase tracking-widest">In the Community</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <ImagePlaceholder src={community1} ratio="aspect-[4/3]" alt="Community service moment" />
+            <ImagePlaceholder src={community2} ratio="aspect-[4/3]" alt="Community service moment" />
+            <ImagePlaceholder src={community3} ratio="aspect-[4/3]" alt="Community service moment" />
+          </div>
+        </div>
+      </section>
 
       {/* Get Involved */}
       <section className="px-6 py-16">
