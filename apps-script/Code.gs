@@ -249,13 +249,25 @@ function syncForms_() {
     const sh = name ? formSs.getSheetByName(name) : formSs.getSheets()[0];
     if (!sh) return;
     const data = sh.getDataRange().getValues();
+    if (data.length < 2) return;
     const defPoints = Number(src.default_points || defaultGlobal);
 
+    // Find columns by HEADER NAME, so forms with different layouts / extra
+    // columns all work (order doesn't matter). We only need passcode + email.
+    const hdr = data[0].map(function (h) { return String(h || '').trim().toLowerCase(); });
+    const passIdx = hdr.findIndex(function (h) { return h.indexOf('passcode') >= 0; });
+    const emailIdx = hdr.findIndex(function (h) { return h.indexOf('email') >= 0; });
+    let nameIdx = hdr.findIndex(function (h) { return h.indexOf('full name') >= 0; });
+    if (nameIdx < 0) nameIdx = hdr.findIndex(function (h) { return h.indexOf('name') >= 0; });
+    let tsIdx = hdr.findIndex(function (h) { return h.indexOf('timestamp') >= 0; });
+    if (tsIdx < 0) tsIdx = 0;
+    if (passIdx < 0 || emailIdx < 0) return; // this sheet doesn't have what we need
+
     for (let r = 1; r < data.length; r++) {
-      const ts = data[r][0] || new Date();
-      const passcode = String(data[r][1] || '').trim();
-      const fullName = String(data[r][2] || '').trim();
-      const email = normEmail_(data[r][3]);
+      const ts = data[r][tsIdx] || new Date();
+      const passcode = String(data[r][passIdx] || '').trim();
+      const fullName = nameIdx >= 0 ? String(data[r][nameIdx] || '').trim() : '';
+      const email = normEmail_(data[r][emailIdx]);
       if (!passcode || !email) continue;
 
       const pkey = passcode.toLowerCase();
