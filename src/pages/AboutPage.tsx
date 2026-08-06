@@ -1,10 +1,10 @@
 import { PageHeader } from "@/components/PageHeader";
 import { ImagePlaceholder } from "@/components/ImagePlaceholder";
 import { missionParagraphs, whatWeDo, aboutStats } from "@/data/about";
-import family1 from "@/assets/images/about/family1.jpg";
-import family2 from "@/assets/images/about/family2.jpg";
+import family1 from "@/assets/images/about/family1-cropped.jpg";
+import family2 from "@/assets/images/about/family2.png";
 import family3 from "@/assets/images/about/family3.jpg";
-import family4 from "@/assets/images/about/family4.jpg";
+import family4 from "@/assets/images/about/family4-cropped.jpg";
 import family5 from "@/assets/images/about/family5.jpg";
 
 // The "About" page. All copy lives in src/data/about.ts.

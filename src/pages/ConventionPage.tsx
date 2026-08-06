@@ -8,8 +8,8 @@ import {
   conventionCta,
 } from "@/data/convention";
 import conv1 from "@/assets/images/convention/conv1.jpg";
-import conv2 from "@/assets/images/convention/conv2.jpg";
-import conv3 from "@/assets/images/convention/conv3.jpg";
+import conv2 from "@/assets/images/convention/conv2-cropped.jpg";
+import conv3 from "@/assets/images/convention/conv3-cropped.jpg";
 import conv4 from "@/assets/images/convention/conv4.jpg";
 import conv5 from "@/assets/images/convention/conv5.jpg";
 import type { Page } from "@/types";

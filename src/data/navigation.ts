@@ -19,7 +19,7 @@ export const navLinks: NavLink[] = [
 // To add or change a social link, edit the `socials` list below — each entry is
 // a { label, url } pair.
 export const contact = {
-  email: "shpe-mit@mit.edu",
+  email: "shpe-exec@mit.edu",
   location: "Massachusetts Institute of Technology, Cambridge, MA 02139",
   socials: [
     { label: "Instagram", url: "https://www.instagram.com/shpemit/" },

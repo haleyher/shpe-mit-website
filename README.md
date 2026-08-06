@@ -66,7 +66,7 @@ Every data file has comments at the top explaining each field. A few common task
   in `src/assets/images/sponsors/` and import it (instructions are in the comments).
 - **Change homepage copy or numbers** → `src/data/home.ts`.
 - **Update officer emails** → `src/data/officers.ts` (the email button next to each
-  name currently points at the shared `shpe-mit@mit.edu` — swap in individual MIT
+  name currently points at the shared `shpe-exec@mit.edu` — swap in individual MIT
   emails when you have them).
 
 ### Adding photos (picture spaces)
